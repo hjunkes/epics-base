@@ -193,9 +193,11 @@ POSIX_CPPFLAGS = $(POSIX_CPPFLAGS_$(OS_API))
 
 ifneq ($(RTEMS_VERSION),5)
 LDLIBS_posix_NET_debugger = -ldebugger
+LDLIBS_posix_NET_ntp = -lntp
 endif
 
 OP_SYS_LDLIBS_posix_NET_yes = -ltftpfs -lz -ltelnetd
+OP_SYS_LDLIBS_posix_NET_yes += $(LDLIBS_posix_NET_ntp)
 OP_SYS_LDLIBS_posix_NET_yes += $(RTEMS_NET_LIB_$(RTEMS_NETWORKING))
 OP_SYS_LDLIBS_posix_NET_yes += $(LDLIBS_posix_NET_debugger)
 OP_SYS_LDLIBS_posix_NET_no = -ltftpfs -lz
