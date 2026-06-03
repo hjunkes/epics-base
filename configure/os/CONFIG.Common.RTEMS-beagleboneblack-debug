@@ -1,0 +1,11 @@
+# CONFIG.Common.RTEMS-beagleboneblack-debug
+#
+# Definitions for beaglebone black  with libdebugger 
+# Override these settings in CONFIG_SITE.Common.RTEMS-beagleboneback-debug
+#-------------------------------------------------------
+
+# Include definitions common to all linux-arm target archs
+include $(CONFIG)/os/CONFIG.Common.RTEMS-beagleboneblack
+
+OP_SYS_LDLIBS += -ldebugger
+ARCH_DEP_CFLAGS += -DRTEMS_LIBDEBUGGER

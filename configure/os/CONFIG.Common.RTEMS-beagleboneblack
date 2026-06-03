@@ -1,6 +1,6 @@
 #
-# CONFIG.Common.RTEMS-beaglebineblack
-# Author: Heinz Junkes <junkes@fhi-berlin.mpg.de> 
+# CONFIG.Common.RTEMS-beagleboneblack
+# Author: Heinz Junkes <junkes@fhi-berlin.mpg.de>
 #
 # All RTEMS targets use the same Makefile fragment
 #
@@ -12,7 +12,35 @@ GNU_TARGET = arm-rtems
 OP_SYS_LDFLAGS += -Wl,--gc-sections
 ARCH_DEP_LDFLAGS = -L$(RTEMS_BASE)/$(GNU_TARGET)$(RTEMS_VERSION)/beagleboneblack/lib/
 
+#MUNCH_SUFFIX = .boot
+#MUNCHNAME = $(PRODNAME:%$(EXE)=%$(MUNCH_SUFFIX))
+#define MUNCH_CMD
+#       $(RTEMS_TOOLS)/bin/$(OBJCOPY_FOR_TARGET) -O binary $< $@
+#endef
+
+MUNCH_SUFFIX = .img
+MUNCHNAME = $(PRODNAME:%$(EXE)=%$(MUNCH_SUFFIX))
+define MUNCH_CMD
+	$(RTEMS_TOOLS)/bin/$(OBJCOPY_FOR_TARGET) -O binary $< $@
+	gzip -9 -f $@
+	$(RTEMS_TOOLS)/bin/mkimage.py -A arm -O linux -T kernel -a 0x80000000 -e 0x80000000 -n $* -d $@.gz $*.img
+endef
+
 include $(CONFIG)/os/CONFIG.Common.RTEMS
 
+#default is 10000
+#OP_SYS_CFLAGS += -DCONFIGURE_MICROSECONDS_PER_TICK=1000
+OP_SYS_CFLAGS += -DCONFIGURE_MICROSECONDS_PER_TICK=100
 
+RTEMSSYMS=$(PRODNAME:%$(EXE)=%.sym)
+RTEMSIMGS=$(PRODNAME:%$(EXE)=%.bin)
+INSTALL_RTEMSSYMS=$(RTEMSSYMS:%=$(INSTALL_BIN)/%)
+INSTALL_RTEMSIMGS=$(RTEMSIMGS:%=$(INSTALL_BIN)/%)
 
+%.sym: %$(EXE)
+	$(XSYMS) $^ $@
+
+%.bin: %$(EXE)
+	$(OBJCOPY) -Obinary $^ $@
+
+#PRODTARGETS+=$(INSTALL_RTEMSSYMS) $(INSTALL_RTEMSIMGS)
