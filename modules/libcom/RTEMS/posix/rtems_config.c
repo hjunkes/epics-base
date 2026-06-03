@@ -12,6 +12,7 @@
  */
 
 #include <rtems.h>
+#include <bsp.h>
 
 /*
  ***********************************************************************
@@ -36,7 +37,7 @@ extern void *POSIX_Init(void *argument);
 #endif
 #define CONFIGURE_MALLOC_STATISTICS     1
 /* MINIMUM_STACK_SIZE == 8K */
-#define CONFIGURE_EXTRA_TASK_STACKS         (4000 * RTEMS_MINIMUM_STACK_SIZE)
+//#define CONFIGURE_EXTRA_TASK_STACKS         (4000 * RTEMS_MINIMUM_STACK_SIZE)
 
 #if __RTEMS_MAJOR__ > 4
 #define CONFIGURE_FILESYSTEM_DEVFS
@@ -51,11 +52,11 @@ extern void *POSIX_Init(void *argument);
 /*
  * Configure LibBSD.
  */
-#define RTEMS_BSD_CONFIG_NET_PF_UNIX
-#define RTEMS_BSD_CONFIG_NET_IF_BRIDGE
-#define RTEMS_BSD_CONFIG_NET_IF_LAGG
-#define RTEMS_BSD_CONFIG_NET_IF_VLAN
-#define RTEMS_BSD_CONFIG_BSP_CONFIG
+//#define RTEMS_BSD_CONFIG_NET_PF_UNIX
+//#define RTEMS_BSD_CONFIG_NET_IF_BRIDGE
+//#define RTEMS_BSD_CONFIG_NET_IF_LAGG
+//#define RTEMS_BSD_CONFIG_NET_IF_VLAN
+/* RTEMS_BSD_CONFIG_BSP_CONFIG intentionally omitted - custom nexus below */
 #define RTEMS_BSD_CONFIG_INIT
 #if !defined(RTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB)
 #error Add "ARCH_DEP_CFLAGS += -DRTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB=??" to your BSP CONFIG
@@ -63,6 +64,22 @@ extern void *POSIX_Init(void *argument);
 #define RTEMS_BSD_CONFIG_DOMAIN_PAGE_MBUFS_SIZE \
     (RTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB * 1024 * 1024)
 #include <machine/rtems-bsd-config.h>
+/* Custom BBB nexus devices - Ethernet/SD only, USB excluded (not in libbsd) */
+#if defined(LIBBSP_ARM_BEAGLE_BSP_H)
+#include <bsp/irq.h>
+#include <rtems/bsd/bsd.h>
+#include <rtems/bsd/modules.h>
+#include <machine/rtems-bsd-nexus-bus.h>
+RTEMS_BSD_DEFINE_NEXUS_DEVICE(ofwbus, 0, 0, NULL);
+SYSINIT_DRIVER_REFERENCE(simplebus, ofwbus);
+SYSINIT_DRIVER_REFERENCE(ti_scm, simplebus);
+SYSINIT_DRIVER_REFERENCE(ti_sysc, simplebus);
+SYSINIT_DRIVER_REFERENCE(cpswss, simplebus);
+SYSINIT_DRIVER_REFERENCE(cpsw, cpswss);
+SYSINIT_DRIVER_REFERENCE(ukphy, miibus);
+SYSINIT_DRIVER_REFERENCE(sdhci_ti, simplebus);
+SYSINIT_DRIVER_REFERENCE(mmcsd, mmc);
+#endif
 #endif // not LEGACY_STACK
 
 /*
@@ -127,6 +144,7 @@ extern void *POSIX_Init(void *argument);
   &rtems_shell_TCPDUMP_Command, \
   &rtems_shell_PFCTL_Command, \
   &rtems_shell_SYSCTL_Command
+
 #else // LEGACY_STACK:
 #define CONFIGURE_SHELL_USER_COMMANDS \
   &bsp_interrupt_shell_command
