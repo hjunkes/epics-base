@@ -35,10 +35,11 @@
 
 #define NSEC_PER_SEC 1000000000
 #define NTPTimeSyncInterval 60.0
-#define NTPTimeSyncRetries 4
+#define NTPTimeSyncRetries 2
 
 
 static struct {
+    int             timeProvider;
     int             synchronize;
     int             synchronized;
     epicsEventId    loopEvent;
@@ -59,7 +60,6 @@ static epicsThreadOnceId onceId = EPICS_THREAD_ONCE_INIT;
 
 static int NTPTimeGetCurrent(epicsTimeStamp *pDest);
 static void NTPTimeSync(void *dummy);
-
 
 /* NTPTime_Report iocsh command */
 static const iocshArg ReportArg0 = { "interest_level", iocshArgArgv};
@@ -89,8 +89,10 @@ static void ShutdownCallFunc(const iocshArgBuf *args)
 
 static void NTPTime_InitOnce(void *pprio)
 {
+    int prio = *(int *)pprio;
     struct timespec timespecNow;
 
+    NTPTimePvt.timeProvider   = prio != NTP_TIME_DISABLE_TIME_PROVIDER;
     NTPTimePvt.synchronize    = 1;
     NTPTimePvt.synchronized   = 0;
     NTPTimePvt.loopEvent      = epicsEventMustCreate(epicsEventEmpty);
@@ -123,7 +125,16 @@ static void NTPTime_InitOnce(void *pprio)
     iocshRegister(&ShutdownFuncDef, ShutdownCallFunc);
 
     /* Finally register as a time provider */
-    generalTimeRegisterCurrentProvider("NTP", *(int *)pprio, NTPTimeGetCurrent);
+    if (NTPTimePvt.timeProvider) {
+        if (prio == NTP_TIME_DISABLE_TIME_PROVIDER) {
+            /*
+             * The priority is not important if the time provider is
+             * disabled
+             */
+            prio = 100;
+        }
+        generalTimeRegisterCurrentProvider("NTP", prio, NTPTimeGetCurrent);
+    }
 }
 
 void NTPTime_Init(int priority)
@@ -145,7 +156,9 @@ void NTPTime_Shutdown(void *dummy)
 
 static void NTPTimeSync(void *dummy)
 {
-    char lastSync[32] = "IOC was booted";
+    char lastSync[32];
+    strncpy(lastSync, "IOC was booted", sizeof(lastSync) - 1);
+    lastSync[sizeof(lastSync) - 1] = '\0';
 
     taskwdInsert(0, NULL, NULL);
 
@@ -180,7 +193,7 @@ static void NTPTimeSync(void *dummy)
         }
 
         ntpDelta = epicsTimeDiffInSeconds(&timeNow, &NTPTimePvt.syncTime);
-        if (ntpDelta <= 0.0 && NTPTimePvt.synchronized) {
+        if (ntpDelta < -1.0 && NTPTimePvt.synchronized) {
             errlogPrintf("NTPTimeSync: NTP time not increasing, delta = %g\n",
                 ntpDelta);
             NTPTimePvt.synchronized = 0;
@@ -188,7 +201,7 @@ static void NTPTimeSync(void *dummy)
         }
 
         epicsTimeToStrftime(lastSync, sizeof(lastSync),
-            "%Y-%m-%d %H:%M:%S.%06f", &NTPTimePvt.syncTime);
+            "%Y-%m-%d %H:%M:%S.%06f", &timeNow);
 
         NTPTimePvt.syncsFailed = 0;
         if (!NTPTimePvt.synchronized) {
@@ -260,7 +273,6 @@ static int NTPTimeGetCurrent(epicsTimeStamp *pDest)
     return 0;
 }
 
-
 /* Status Report */
 
 int NTPTime_Report(int level)
@@ -268,6 +280,11 @@ int NTPTime_Report(int level)
     if (onceId == EPICS_THREAD_ONCE_INIT) {
         printf("NTP driver not initialized\n");
     } else if (NTPTimePvt.synchronize) {
+        if (NTPTimePvt.timeProvider) {
+            printf("NTP driver is registered as a time provider\n");
+        } else {
+            printf("NTP directly supported by OS\n");
+        }
         printf("NTP driver %s synchronized with server\n",
             NTPTimePvt.synchronized ? "is" : "is *not*");
         if (NTPTimePvt.syncsFailed) {
@@ -276,9 +293,13 @@ int NTPTime_Report(int level)
         }
         if (level) {
             char lastSync[32];
-
-            epicsTimeToStrftime(lastSync, sizeof(lastSync),
-                "%Y-%m-%d %H:%M:%S.%06f", &NTPTimePvt.syncTime);
+            if (NTPTimePvt.syncTime.secPastEpoch > 0) {
+                epicsTimeToStrftime(lastSync, sizeof(lastSync),
+                    "%Y-%m-%d %H:%M:%S.%06f", &NTPTimePvt.syncTime);
+            } else {
+                strncpy(lastSync, "not yet synced", sizeof(lastSync) - 1);
+                lastSync[sizeof(lastSync) - 1] = '\0';
+            }
             printf("Synchronization interval = %.1f seconds\n",
                 NTPTimeSyncInterval);
             printf("Last synchronized at %s\n",

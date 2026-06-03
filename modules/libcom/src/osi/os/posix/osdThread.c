@@ -854,6 +854,9 @@ LIBCOM_API void epicsStdCall epicsThreadSetPriority(epicsThreadId pthreadInfo,un
 #if defined (_POSIX_THREAD_PRIORITY_SCHEDULING) && _POSIX_THREAD_PRIORITY_SCHEDULING > 0
     if(!pcommonAttr->usePolicy) return;
     pthreadInfo->schedParam.sched_priority = epicsThreadGetPosixPriority(pthreadInfo);
+//#ifdef __rtems__
+//    pthreadInfo->schedParam.sched_priority = 255 - pthreadInfo->schedParam.sched_priority; /* on RTEMS lower number -> higher prio */ 
+//#endif 
     status = pthread_attr_setschedparam(
         &pthreadInfo->attr,&pthreadInfo->schedParam);
     if(errVerbose) checkStatus(status,"pthread_attr_setschedparam");

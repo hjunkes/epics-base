@@ -102,12 +102,6 @@ OS_CLASS = RTEMS
 # Operating system compile & link flags
 OP_SYS_CFLAGS += -D__LINUX_ERRNO_EXTENSIONS__
 
-# Has RTEMS been built with the internal legacy stack?
-ifeq ($(RTEMS_LEGACY_NETWORKING_INTERNAL),yes)
-RTEMS_HAS_NETWORKING = yes
-RTEMS_NETWORKING = legacy_internal
-endif
-
 # Has RTEMS been built with the legacy stack as a separate package?
 ifeq ($(RTEMS_LEGACY_NETWORKING),yes)
 RTEMS_HAS_NETWORKING = yes
@@ -118,15 +112,13 @@ endif
 ifeq ($(RTEMS_BSD_NETWORKING),yes)
 RTEMS_HAS_NETWORKING = yes
 RTEMS_NETWORKING = bsd
+# Which nfs version to use
+ARCH_DEP_CFLAGS += -DNET_CFG_NFS_MOUNT_OPTIONS=\"nfsv4,minorversion=1\"
 endif
 
 RTEMS_LEGACY_NET_LIB_no=
 
-# Legacy network with RTEMS 5 and earlier
-RTEMS_NET_LIB_legacy_internal=-lnfs
-OP_SYS_CFLAGS_NET_legacy_internal = -DRTEMS_LEGACY_STACK
-
-# Legacy network with RTEMS 6 is a separate package and library
+# Leagcy network with RTEMS 6 is a separate package and library
 RTEMS_NET_LIB_legacy=-lnfs -lnetworking -lnfs
 OP_SYS_CFLAGS_NET_legacy = -DRTEMS_LEGACY_STACK
 
@@ -140,14 +132,21 @@ OP_SYS_CFLAGS += $(OP_SYS_CFLAGS_NET_$(RTEMS_NETWORKING))
 POSIX_CPPFLAGS_posix = -D_GNU_SOURCE -D_DEFAULT_SOURCE
 POSIX_CPPFLAGS = $(POSIX_CPPFLAGS_$(OS_API))
 
+ifneq ($(RTEMS_VERSION),5)
+LDLIBS_posix_NET_ntp = -lntp
+endif
+
 OP_SYS_LDLIBS_posix_NET_yes = -ltftpfs -lz -ltelnetd
+OP_SYS_LDLIBS_posix_NET_yes += $(LDLIBS_posix_NET_ntp)
 OP_SYS_LDLIBS_posix_NET_yes += $(RTEMS_NET_LIB_$(RTEMS_NETWORKING))
 OP_SYS_LDLIBS_posix_NET_no = -ltftpfs -lz
 OP_SYS_LDLIBS_score_NET_yes = -lnfs
 OP_SYS_LDLIBS_score_NET_no = -lnfs
+OP_SYS_LDLIBS += -Wl,--start-group
 OP_SYS_LDLIBS += -lrtemsCom -lCom
 OP_SYS_LDLIBS += $(OP_SYS_LDLIBS_$(OS_API)_NET_$(RTEMS_HAS_NETWORKING))
 OP_SYS_LDLIBS += -lrtemscpu -lc -lm
+OP_SYS_LDLIBS += -Wl,--end-group
 
 OP_SYS_LDFLAGS_posix = -u POSIX_Init
 OP_SYS_LDFLAGS_score = -u Init \
