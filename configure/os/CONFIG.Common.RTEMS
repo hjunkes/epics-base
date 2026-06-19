@@ -169,6 +169,8 @@ endif
 ifeq ($(RTEMS_BSD_NETWORKING),yes)
 RTEMS_HAS_NETWORKING = yes
 RTEMS_NETWORKING = bsd
+# Which nfs version to use
+ARCH_DEP_CFLAGS += -DNET_CFG_NFS_MOUNT_OPTIONS=\"nfsv4,minorversion=1\"
 endif
 
 RTEMS_LEGACY_NET_LIB_no=
