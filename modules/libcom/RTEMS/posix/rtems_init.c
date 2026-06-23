@@ -1039,7 +1039,6 @@ POSIX_Init ( void *argument __attribute__((unused)))
     char                *argv[3]         = { NULL, NULL, NULL };
     rtems_status_code   sc;
     struct timespec     now;
-    char timeBuff[100];
 
     initConsole ();
 
@@ -1077,38 +1076,10 @@ POSIX_Init ( void *argument __attribute__((unused)))
     /* check for RTC ... unfortunately seems to be missing with libbsd and qemu ? */
 
     if (checkRealTime() >= 0) {
-      printf(" get time from RTC\n");
-      setRealTimeToRTEMS();
+        printf(" get time from RTC\n");
+        setRealTimeToRTEMS();
     }
-/* 
-else {
-      printf("\n***** Ask ntp server once... *****\n");
-      if (rtemsInit_NTP_server_ip[0]=='\0') {
-        printf ("***** No NTP server ...\n");
-      } else if (epicsNtpGetTime(rtemsInit_NTP_server_ip, &now) < 0) {
-        printf ("***** Can't get time from ntp ...\n");
-     
-        // set time to 13.5.2026
-        now.tv_sec = 1778691723;
-        now.tv_nsec = 0;
-        sc = clock_settime(CLOCK_REALTIME, &now);
-        if (sc < 0)
-          printf ("***** Can't set time: %s\n", rtems_status_text (sc));
-      
-      } else {
-        if (clock_settime(CLOCK_REALTIME, &now) < 0){
-          printf ("***** Can't set time: %s\n", rtems_status_text (sc));
-        }
-      }
-    } 
-*/
-    sc = clock_gettime( CLOCK_REALTIME, &now);
-    if ( sc < 0) {
-      printf ("***** Can't get time: %s\n", rtems_status_text (sc));
-    } else {
-      strftime(timeBuff, sizeof timeBuff, "%D %T", gmtime(&now.tv_sec));
-      printf("time set to : %s.%09ld UTC\n", timeBuff, now.tv_nsec);
-    }
+
 
     /* TBD ...
      * Architecture-specific hooks
@@ -1117,7 +1088,6 @@ else {
     if (epicsRtemsInitPreSetBootConfigFromNVRAM(&rtems_bsdnet_config) != 0)
         delayedPanic("epicsRtemsInitPreSetBootConfigFromNVRAM");
     if (rtems_bsdnet_config.bootp == NULL) {
-//        extern void setBootConfigFromNVRAM(void);
         setBootConfigFromNVRAM();
     }
     if (epicsRtemsInitPostSetBootConfigFromNVRAM(&rtems_bsdnet_config) != 0)
@@ -1137,15 +1107,14 @@ else {
     printf("\n***** RTEMS Version: %s *****\n",
         rtems_get_version_string());
 
-
 #ifndef RTEMS_LEGACY_STACK
-#if defined(QEMU_FIXUPS) && defined(__i386__)
+  #if defined(QEMU_FIXUPS) && defined(__i386__)
     // glorious hack to stub out useless EEPROM check
     // which takes sooooo longggg w/ QEMU
     // Writes a 'ret' instruction to immediately return to the caller
     extern void _bsd_e1000_validate_nvm_checksum(void);
     *(char*)&_bsd_e1000_validate_nvm_checksum = 0xc3;
-#endif
+  #endif
 
     /*
      * Start network (libbsd)
@@ -1155,7 +1124,7 @@ else {
      * -net nic,model=e1000 -net user,restrict=yes \
      * -append "--video=off --console=/dev/com1" -kernel libComTestHarness
      */
-    printf("\n***** Initializing network (libbsd) *****\n");
+
     if(0) rtems_bsd_setlogpriority("debug");
     on_exit(default_network_on_exit, NULL);
 
@@ -1168,6 +1137,7 @@ else {
        then immediately overwrite ntp.conf with our server version */
     rtems_ntpd_client_pool_config(rtemsInit_NTP_server_ip);  /* writes leap-seconds */
     
+    printf("\n***** Prepare ntp.conf (server %s) *****\n", rtemsInit_NTP_server_ip);
     /* Now overwrite ntp.conf with correct server + iburst */
     FILE *fp = fopen("/etc/ntp.conf", "w");
     if (fp != NULL) {
@@ -1184,23 +1154,16 @@ else {
       printf("NTP: overwrote /etc/ntp.conf with server %s iburst\n",
              rtemsInit_NTP_server_ip);
     }
+
     /* Tell osdNTP_Configure to use this file, skipping pool config */
     epicsEnvSet("EPICS_TS_NTP_CONF_FILE", "/etc/ntp.conf");
 
     printf("\n***** Initializing network (libbsd) *****\n");
     sc = rtems_bsd_initialize();
     assert(sc == RTEMS_SUCCESSFUL);
-    /* fix the MAC address 
-     * read it from the e-fuse via ti_scm registers directly at startup.
-     * The SCM base address is 0x44E10000, MAC0 is at offsets 0x630 (hi) and 0x634 (low)
-     *
-     * the proper long-term fix is to read the MAC in the cpsw driver from ti_scm directly
-     */
-    rtems_task_wake_after(RTEMS_MILLISECONDS_TO_TICKS(500));
 
     /* Let the callout timer allocate its resources */
-    sc = rtems_task_wake_after(2);
-    assert(sc == RTEMS_SUCCESSFUL);
+    rtems_task_wake_after(RTEMS_MILLISECONDS_TO_TICKS(500));
 
     printf("\n***** ifconfig lo0 *****\n");
     rtems_bsd_ifconfig_lo0();
@@ -1253,27 +1216,7 @@ else {
         rtems_bsd_command_netstat(2, (char**) netstat_args);
     }
 
-    char *cp;
-    if ((cp = getenv("EPICS_TS_NTP_INET")) != NULL) {
-        printf("\n\n------ EPICS_TS_NTP_INET already set : %s -------\n", cp);
-     } else {
-        cp = epicsStrDup("141.14.138.238");
-        /*cp = epicsStrDup("10.0.0.100"); */
-        printf("\n\n------ hard coded ntp server address : %s -------\n", cp);
-        epicsEnvSet ("EPICS_TS_NTP_INET", cp);
-    }
-//    rtems_bsdnet_config.ntp_server[0] = cp;
 
-    int rtems_bsdnet_ntpserver_count = 1;
-    struct in_addr rtems_bsdnet_ntpserver[rtems_bsdnet_ntpserver_count];
-//    memcpy(rtems_bsdnet_ntpserver, rtems_bsdnet_config.ntp_server, sizeof(struct in_addr));
-    memcpy(rtems_bsdnet_ntpserver, cp, sizeof(struct in_addr));
-
-/*
-    sc = rtems_task_set_priority (RTEMS_SELF, mainPrio, &old);
-    assert(sc == RTEMS_SUCCESSFUL);
-    printf("Priority changed at end of network init from %d -> %d\n", old, mainPrio);
-*/
 #else // Legacy stack, old network initialization
     if (rtems_bsdnet_config.network_task_priority == 0)
     {
@@ -1317,6 +1260,18 @@ else {
             printf("WARNING: epicsNtpGetTime failed, clock not set\n");
         }
     }
+    char *cp;
+    if ((cp = getenv("EPICS_TS_NTP_INET")) != NULL) {
+        printf("\n\n------ EPICS_TS_NTP_INET already set : %s -------\n", cp);
+     } else {
+        cp = epicsStrDup(rtemsInit_NTP_server_ip);
+        printf("\n\n------ ntp server address : %s -------\n", cp);
+        epicsEnvSet ("EPICS_TS_NTP_INET", cp);
+    }
+
+    int rtems_bsdnet_ntpserver_count = 1;
+    struct in_addr rtems_bsdnet_ntpserver[rtems_bsdnet_ntpserver_count];
+    memcpy(rtems_bsdnet_ntpserver, cp, sizeof(struct in_addr));
 
     /* Step 2: initialise EPICS time provider now, with valid OS clock.
     NTPTime_Init uses epicsThreadOnce so the initHookAtBeginning call
