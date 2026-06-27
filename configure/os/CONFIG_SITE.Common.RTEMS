@@ -45,6 +45,13 @@ USE_GESYS = NO
 
 # Select the command-line-input library to use
 #
-COMMANDLINE_LIBRARY = EPICS
+COMMANDLINE_LIBRARY = LIBTECLA
 #COMMANDLINE_LIBRARY = LIBTECLA
 #COMMANDLINE_LIBRARY = READLINE
+
+# Use LIBTECLA path to get osdReadline.c included, but override
+# the library flags since we provide our own implementation
+LDLIBS_LIBTECLA =
+
+# Override tecla libs — our osdReadline.c needs no external libraries
+override LDLIBS_LIBTECLA =

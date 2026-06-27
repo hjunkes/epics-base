@@ -268,7 +268,7 @@ ARFLAGS = rc
 
 #--------------------------------------------------
 # Command-line input support
-LDLIBS_LIBTECLA = -ltecla_r -lncurses
+LDLIBS_LIBTECLA =
 LDLIBS_READLINE = -lreadline -lncurses
 
 #--------------------------------------------------
