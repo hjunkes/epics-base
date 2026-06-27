@@ -366,3 +366,10 @@ epicsInstallDir.h: $(TOP)/configure/CONFIG_SITE*
 	$(ECHO) "INSTALL_LOCATION=$(INSTALL_LOCATION)"
 	$(PERL) $(TOP)/modules/database/src/std/softIoc/makeInstallDir.pl "$(INSTALL_LOCATION)" > $@.stdout
 	$(MV) $@.stdout $@
+
+# RTEMS 7: no libtecla available, osdReadline.c is self-contained
+ifeq ($(OS_CLASS),RTEMS)
+libComTestHarness_SYS_LIBS_RTEMS =
+OP_SYS_LDLIBS_RTEMS += 
+override LDLIBS_LIBTECLA =
+endif
