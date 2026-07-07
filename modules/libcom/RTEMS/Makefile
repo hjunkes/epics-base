@@ -35,6 +35,7 @@ rtemsCom_SRCS += epicsRtemsInit_memfs.c
 rtemsCom_SRCS += epicsRtemsInit_net.cpp
 rtemsCom_SRCS += epicsRtemsInit_nfs.cpp
 rtemsCom_SRCS += epicsRtemsInit_ntp.cpp
+rtemsCom_SRCS += setBootConfigFromNVRAM.c
 else
 ifeq ($(RTEMS_QEMU_FIXUPS),YES)
 rtems_init_CPPFLAGS += -DQEMU_FIXUPS
