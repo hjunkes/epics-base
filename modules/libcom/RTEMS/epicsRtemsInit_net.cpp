@@ -117,3 +117,18 @@ void epicRtemsInit_net() {
     epicsRtemsInitRegisterHandler(
         "system", "net", rtemsInit_Order_net, true, rtemsNetInitialize);
 }
+
+#if defined(HAVE_MOTLOAD) || defined(HAVE_PPCBUG) || defined(__mcf528x__)
+extern "C" int setNetConfigEnvFromNVRAM(char*, size_t);
+
+static int rtemsNetNVRAM() {
+    static char ntp_server_ip[16];
+    int r = setNetConfigEnvFromNVRAM(ntp_server_ip, sizeof(ntp_server_ip));
+    if (r == 0 && ntp_server_ip[0] != '\0')
+        setenv("EPICS_TS_NTP_INET", ntp_server_ip, 0);
+    return 0;
+}
+
+static epicsRtemsInitRegister rtemsNetNVRAM_reg(
+    "system", "net.nvram", 450, true, rtemsNetNVRAM);
+#endif
