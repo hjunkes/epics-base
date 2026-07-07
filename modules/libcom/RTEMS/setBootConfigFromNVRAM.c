@@ -35,7 +35,11 @@ char *env_nfsMountPoint;
 
 #if defined(HAVE_MOTLOAD) || defined(HAVE_PPCBUG) || defined(__mcf528x__)
 
+#ifdef RTEMS_LEGACY_STACK
 extern char* rtems_bsdnet_bootp_cmdline;
+#else
+static char* rtems_bsdnet_bootp_cmdline;
+#endif
 /*
  * Split argument string of form nfs_server:nfs_export:<path>
  * The nfs_export component will be used as:
@@ -314,6 +318,75 @@ setBootConfigFromNVRAM(char *ntp_server_ip, size_t ntp_server_ip_size)
     }
     return 0;
 }
+
+
+#if !defined(RTEMS_LEGACY_STACK)
+/*
+ * Read GEV network config and set RTEMS_NET_* environment variables
+ * for rtems_bsd_rc_conf_from_env() used by RTEMS_INIT=new.
+ * Called BEFORE rtems_bsd_initialize() - must not touch the network stack.
+ * Returns 0 if static IP found, -1 if DHCP should be used.
+ */
+int
+setNetConfigEnvFromNVRAM(char *ntp_server_ip, size_t ntp_server_ip_size)
+{
+    const char *mot_script_boot;
+    volatile char *nvp;
+    struct boot_net_config cfg = {0};
+# if defined(BSP_NVRAM_BASE_ADDR)
+    nvp = (volatile char *)(BSP_NVRAM_BASE_ADDR+0x70f8);
+# elif defined(BSP_I2C_VPD_EEPROM_DEV_NAME)
+    char gev_buf[3592];
+    int fd;
+    if ((fd = open(BSP_I2C_VPD_EEPROM_DEV_NAME, 0)) < 0)
+        return -1;
+    lseek(fd, 0x10f8, SEEK_SET);
+    if (read(fd, gev_buf, sizeof gev_buf) != sizeof gev_buf) {
+        close(fd);
+        return -1;
+    }
+    close(fd);
+    nvp = gev_buf;
+# else
+    return -1;
+# endif
+    mot_script_boot = gev("mot-script-boot", nvp);
+    if ((cfg.ip_address = gev("mot-/dev/enet0-cipa", nvp)) == NULL)
+        cfg.ip_address = motScriptParm(mot_script_boot, 'c');
+    if ((cfg.netmask = gev("mot-/dev/enet0-snma", nvp)) == NULL)
+        cfg.netmask = motScriptParm(mot_script_boot, 'm');
+    if ((cfg.gateway = gev("mot-/dev/enet0-gipa", nvp)) == NULL)
+        cfg.gateway = motScriptParm(mot_script_boot, 'g');
+    {
+        char *ntp_gev = gev("epics-ntpserver", nvp);
+        char *server  = gev("mot-/dev/enet0-sipa", nvp);
+        cfg.ntp_server = ntp_gev ? ntp_gev : server;
+    }
+    cfg.hostname = gev("rtems-client-name", nvp);
+
+    /* Set RTEMS_NET_* env vars for rtems_bsd_rc_conf_from_env() */
+    setenv("RTEMS_NET_IFACE_1", "mve0", 1);
+    if (cfg.ip_address && cfg.netmask) {
+        setenv("RTEMS_NET_IF_1_IP_ADDR", cfg.ip_address, 1);
+        setenv("RTEMS_NET_IF_1_NETMASK", cfg.netmask, 1);
+    }
+    if (cfg.gateway)
+        setenv("RTEMS_NET_GATEWAY_IP", cfg.gateway, 1);
+    if (cfg.hostname)
+        setenv("RTEMS_NET_HOSTNAME", cfg.hostname, 1);
+
+    /* NTP server output */
+    if (ntp_server_ip && ntp_server_ip_size > 0 && cfg.ntp_server)
+        snprintf(ntp_server_ip, ntp_server_ip_size, "%s", cfg.ntp_server);
+
+    /* Set cmdline for NFS */
+    rtems_bsdnet_bootp_cmdline = gev("epics-script", nvp);
+    splitRtemsBsdnetBootpCmdline();
+    splitNfsMountPath(gev("epics-nfsmount", nvp));
+
+    return (cfg.ip_address && cfg.netmask) ? 0 : -1;
+}
+#endif /* !RTEMS_LEGACY_STACK */
 
 #elif defined(HAVE_PPCBUG)
 /*
