@@ -188,7 +188,7 @@ static void NTPTimeSync(void *dummy)
         }
 
         epicsTimeToStrftime(lastSync, sizeof(lastSync),
-            "%Y-%m-%d %H:%M:%S.%06f", &NTPTimePvt.syncTime);
+            "%Y-%m-%d %H:%M:%S.%06f", &timeNow);
 
         NTPTimePvt.syncsFailed = 0;
         if (!NTPTimePvt.synchronized) {
