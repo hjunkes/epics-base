@@ -42,7 +42,7 @@ static int rtemsNFSInitialize() {
         std::filesystem::create_directories(nfs_target);
         auto r = mount(
             nfs_source.c_str(), nfs_target.c_str(),
-            "nfs", RTEMS_FILESYSTEM_READ_WRITE, "nfsv4,minorversion=1");
+            "nfs", RTEMS_FILESYSTEM_READ_WRITE, NET_CFG_NFS_MOUNT_OPTIONS);
         if (r < 0) {
             std::cout << "error: mount: nfs: " << std::strerror(errno)
                       << std::endl;
