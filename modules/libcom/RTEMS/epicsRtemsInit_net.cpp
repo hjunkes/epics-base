@@ -126,6 +126,7 @@ static int rtemsNetNVRAM() {
     int r = setNetConfigEnvFromNVRAM(ntp_server_ip, sizeof(ntp_server_ip));
     if (r == 0 && ntp_server_ip[0] != '\0')
         setenv("EPICS_TS_NTP_INET", ntp_server_ip, 0);
+        setenv("RTEMS_NET_NTP_IP", ntp_server_ip, 0);
     return 0;
 }
 
