@@ -38,7 +38,7 @@ char *env_nfsMountPoint;
 #ifdef RTEMS_LEGACY_STACK
 extern char* rtems_bsdnet_bootp_cmdline;
 #else
-static char* rtems_bsdnet_bootp_cmdline;
+char* rtems_bsdnet_bootp_cmdline __attribute__((weak));
 #endif
 /*
  * Split argument string of form nfs_server:nfs_export:<path>
@@ -365,6 +365,11 @@ setNetConfigEnvFromNVRAM(char *ntp_server_ip, size_t ntp_server_ip_size)
     cfg.hostname = gev("rtems-client-name", nvp);
 
     /* Set RTEMS_NET_* env vars for rtems_bsd_rc_conf_from_env() */
+    printf("setNetConfigEnvFromNVRAM: ip=%s nm=%s gw=%s script=%s\n",
+           cfg.ip_address ? cfg.ip_address : "NULL",
+           cfg.netmask ? cfg.netmask : "NULL",
+           cfg.gateway ? cfg.gateway : "NULL",
+           gev("epics-script", nvp) ? gev("epics-script", nvp) : "NULL");
     setenv("RTEMS_NET_IFACE_1", "mve0", 1);
     if (cfg.ip_address && cfg.netmask) {
         setenv("RTEMS_NET_IF_1_IP_ADDR", cfg.ip_address, 1);
@@ -379,9 +384,12 @@ setNetConfigEnvFromNVRAM(char *ntp_server_ip, size_t ntp_server_ip_size)
     if (ntp_server_ip && ntp_server_ip_size > 0 && cfg.ntp_server)
         snprintf(ntp_server_ip, ntp_server_ip_size, "%s", cfg.ntp_server);
 
-    /* Set cmdline for NFS */
-    rtems_bsdnet_bootp_cmdline = gev("epics-script", nvp);
-    splitRtemsBsdnetBootpCmdline();
+    /* Set NFS mount path for RTEMS_INIT=new NFS/IOC handlers */
+    {
+        const char *script = gev("epics-script", nvp);
+        if (script != NULL)
+            setenv("RTEMS_NFS_MOUNT_PATH", script, 1);
+    }
     splitNfsMountPath(gev("epics-nfsmount", nvp));
 
     return (cfg.ip_address && cfg.netmask) ? 0 : -1;
