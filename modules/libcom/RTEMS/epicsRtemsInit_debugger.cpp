@@ -66,11 +66,20 @@ static int rtemsDebuggerInitialize() {
     rtems_debugger_register_tcp_remote();
     iocshRegister(&debuggerStartFuncDef, debuggerStartFunc);
     iocshRegister(&breakWaitFuncDef, breakWaitFunc);
+    /* Auto-start if RTEMS_DEBUGGER_PORT is set */
+    auto envp = getenv("RTEMS_DEBUGGER_PORT");
+    if (envp != nullptr) {
+        rtems_printer printer;
+        rtems_print_printer_fprintf(&printer, stdout);
+        std::cout << "Starting debugger on port " << envp << std::endl;
+        rtems_debugger_start("tcp", envp,
+            RTEMS_DEBUGGER_TIMEOUT, 1, &printer);
+    }
     return 0;
 }
 
 void epicRtemsInit_debugger() {
     epicsRtemsInitRegisterHandler(
         "system", "debugger", rtemsInit_Order_post_net_services + 40,
-        false, rtemsDebuggerInitialize);
+        true, rtemsDebuggerInitialize);
 }
