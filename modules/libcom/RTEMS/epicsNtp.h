@@ -8,7 +8,15 @@
 
 #define NTP_TIMESTAMP_DELTA 2208988800ull
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int epicsNtpGetTime(char *ntpIp, struct timespec *now);
+
+#ifdef __cplusplus
+}
+#endif
 
 typedef struct
 {
