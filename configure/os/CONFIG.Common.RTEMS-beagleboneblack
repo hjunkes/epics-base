@@ -12,6 +12,11 @@ GNU_TARGET = arm-rtems
 OP_SYS_LDFLAGS += -Wl,--gc-sections
 ARCH_DEP_LDFLAGS = -L$(RTEMS_BASE)/$(GNU_TARGET)$(RTEMS_VERSION)/beagleboneblack/lib/
 
+# libbsd mbuf pool size for RTEMS_INIT=new (see posix/rtems_config.c).
+# BBB has 512MB RAM; 16MB is a conservative starting point -- raise it
+# if mbuf exhaustion shows up under network load.
+ARCH_DEP_CFLAGS += -DRTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB=16
+
 #MUNCH_SUFFIX = .boot
 #MUNCHNAME = $(PRODNAME:%$(EXE)=%$(MUNCH_SUFFIX))
 #define MUNCH_CMD
@@ -31,6 +36,13 @@ include $(CONFIG)/os/CONFIG.Common.RTEMS
 #default is 10000
 #OP_SYS_CFLAGS += -DCONFIGURE_MICROSECONDS_PER_TICK=1000
 OP_SYS_CFLAGS += -DCONFIGURE_MICROSECONDS_PER_TICK=100
+
+# epicsRtemsInit_debugger.cpp (RTEMS_INIT=new only) calls into RTEMS's
+# debugger support, which lives in a separate library the generic
+# CONFIG.Common.RTEMS link list doesn't know about.
+ifneq ($(RTEMS_INIT),legacy)
+OP_SYS_LDLIBS += -ldebugger
+endif
 
 RTEMSSYMS=$(PRODNAME:%$(EXE)=%.sym)
 RTEMSIMGS=$(PRODNAME:%$(EXE)=%.bin)

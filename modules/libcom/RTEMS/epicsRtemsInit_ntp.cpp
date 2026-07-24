@@ -27,5 +27,5 @@ static int rtemsNTPInitialize() {
 void epicRtemsInit_ntp() {
     epicsRtemsInitRegisterHandler(
         "system", "ntp.ip", rtemsInit_Order_post_net_services + 50,
-        false, rtemsNTPInitialize);
+        true, rtemsNTPInitialize);
 }

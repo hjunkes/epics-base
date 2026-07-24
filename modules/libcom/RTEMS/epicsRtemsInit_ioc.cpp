@@ -17,6 +17,19 @@
 static std::string hostname;
 
 /*
+ * Compatibility shim: some external modules (e.g. iocStats'
+ * devIocStatsOSD.h for RTEMS, via "#define sysBootLine
+ * rtems_bsdnet_bootp_cmdline") read the legacy libbsd stack's
+ * rtems_bsdnet_bootp_cmdline global directly to report the IOC's
+ * boot/startup-script line. RTEMS_INIT=new has no legacy bsdnet config
+ * to provide it (posix/rtems_init.c isn't built), so mirror the
+ * already-derived RTEMS_BOOT_CMD_LINE into it here. extern "C" because
+ * consumers declare it via <rtems/rtems_bsdnet.h>, which gives it C
+ * linkage.
+ */
+extern "C" char *rtems_bsdnet_bootp_cmdline = nullptr;
+
+/*
  * Set working directory (workdir)
  *
  * The working directory is evaluated in the following order.
@@ -84,6 +97,7 @@ static int rtemsIOCInitialize() {
     setenv("TERM", "xterm", 1);
     setenv("IOCSH_HISTSIZE", "20", 1);
     setWorkingDirectory();
+    rtems_bsdnet_bootp_cmdline = getenv("RTEMS_BOOT_CMD_LINE");
     iocShellPrompt();
     tzset();
     return 0;
