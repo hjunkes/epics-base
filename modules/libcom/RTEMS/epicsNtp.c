@@ -89,5 +89,7 @@ int epicsNtpGetTime(char *ntpIp, struct timespec *now)
   // (1900)------------------(1970)**************************************(Time Packet Left the Server)
   time_t txTm = ( time_t ) ( packet.txTm_s - NTP_TIMESTAMP_DELTA );
   now->tv_sec = txTm;
+  // Convert the 32-bit NTP fraction (units of 1/2^32 sec) to nanoseconds.
+  now->tv_nsec = ( long ) ( ( ( uint64_t ) packet.txTm_f * 1000000000ull ) >> 32 );
   return 0;
 }
