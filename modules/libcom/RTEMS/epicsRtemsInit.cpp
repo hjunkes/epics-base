@@ -153,13 +153,25 @@ static void initConsole(void)
 }
 
 static void initChangePriority(unsigned int priority) {
+    pthread_attr_t pattr;
+    if (pthread_attr_init(&pattr) < 0) {
+        printf(
+            "error: initChangePriority: cannot get POSIX_Init attr: %s\n",
+            std::strerror(errno));
+    }
+    struct sched_param pparam;
+    if (pthread_attr_getschedparam(&pattr, &pparam) < 0) {
+        printf(
+            "error: initChangePriority: cannot get POSIX_Init params: %s\n",
+            std::strerror(errno));
+    }
     struct epicsThreadOSD info;
     info.osiPriority = priority;
-    int posix_priority = epicsThreadGetPosixPriority(&info);
-    int r = pthread_setschedprio(pthread_self(), posix_priority);
-    if (r != 0) {
-        printf("error: initChangePriority: cannot set priority: %s\n",
-               std::strerror(r));
+    pparam.sched_priority = epicsThreadGetPosixPriority(&info);
+    if (pthread_attr_setschedparam(&pattr, &pparam) < 0) {
+        printf(
+            "error: initChangePriority: cannot set POSIX_Init params: %s\n",
+            std::strerror(errno));
     }
 }
 
@@ -185,6 +197,7 @@ static void initMakeArguments(args_type& args, main_args& margs) {
             }
             args.emplace_back(cmdline.substr(0, first_space));
             margs.emplace_back(args.back().c_str());
+            first_space = cmdline.find_first_of(' ');
             if (first_space == std::string::npos) {
                 cmdline.clear();
             } else {
@@ -315,7 +328,7 @@ void *POSIX_Init(void *) {
             bool enabled = epicsRtemsInit_enabled(handler);
             std::cout << "] Init (" << handler.order
                       << ',' << step << '/' << handlers->size()
-                      << ',' << static_cast<const char*>(enabled ? "enabled" : "disabled")
+                      << ',' << (char*) (enabled ? "enabled" : "disabled")
                       << "): " << handler.str()
                       << std::endl << std::flush;
             if (enabled) {

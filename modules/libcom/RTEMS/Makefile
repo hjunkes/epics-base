@@ -16,8 +16,6 @@ SRC_DIRS += ../$(OS_API)
 
 PERL_SCRIPTS += epicsMakeMemFs.pl
 
-DOCS = epicsRtemsInit.md
-
 INC += epicsRtemsInitHooks.h
 INC += epicsMemFs.h
 INC += epicsNtp.h
@@ -35,6 +33,12 @@ rtemsCom_SRCS += epicsRtemsInit_memfs.c
 rtemsCom_SRCS += epicsRtemsInit_net.cpp
 rtemsCom_SRCS += epicsRtemsInit_nfs.cpp
 rtemsCom_SRCS += epicsRtemsInit_ntp.cpp
+rtemsCom_SRCS += epicsRtemsInit_bbb_net.cpp
+epicsRtemsInit_bbb_net_CPPFLAGS += -DBSP_$(RTEMS_BSP)
+# epicsRtemsInit_net.cpp's own registration function calls the BBB
+# handlers above, guarded by BSP_$(RTEMS_BSP) -- it needs the same
+# define so that guard actually compiles out on non-BBB targets.
+epicsRtemsInit_net_CPPFLAGS += -DBSP_$(RTEMS_BSP)
 else
 ifeq ($(RTEMS_QEMU_FIXUPS),YES)
 rtems_init_CPPFLAGS += -DQEMU_FIXUPS

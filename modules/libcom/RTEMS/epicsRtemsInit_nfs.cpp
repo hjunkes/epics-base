@@ -36,13 +36,20 @@ static int rtemsNFSInitialize() {
         auto nfs_source = env.substr(0, last_colon);
         auto first_colon = nfs_source.find_first_of(':');
         auto nfs_target = nfs_source.substr(first_colon + 1);
+        const char* mount_options = nullptr;
+#if defined(NET_CFG_NFS_MOUNT_OPTIONS)
+        if (std::strlen(NET_CFG_NFS_MOUNT_OPTIONS) != 0) {
+            mount_options = NET_CFG_NFS_MOUNT_OPTIONS;
+        }
+#endif
         std::cout << "mount: nfs: "
                   << nfs_source << " -> " << nfs_target
+                  << " options:" << (mount_options ? mount_options : "")
                   << std::endl;
         std::filesystem::create_directories(nfs_target);
         auto r = mount(
             nfs_source.c_str(), nfs_target.c_str(),
-            "nfs", RTEMS_FILESYSTEM_READ_WRITE, "nfsv4,minorversion=1");
+            "nfs", RTEMS_FILESYSTEM_READ_WRITE, mount_options);
         if (r < 0) {
             std::cout << "error: mount: nfs: " << std::strerror(errno)
                       << std::endl;

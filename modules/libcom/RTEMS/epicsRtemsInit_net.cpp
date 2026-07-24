@@ -168,7 +168,45 @@ static int rtemsNetInitialize() {
     return 0;
 }
 
+#if defined(BSP_beagleboneblack)
+/* Implemented in epicsRtemsInit_bbb_net.cpp: bridges DHCP-delivered
+ * boot config (no NVRAM on this board) into the env vars the rest of
+ * this init framework expects. */
+extern int rtemsBbbNetPreInitialize();
+extern int rtemsBbbNetPostInitialize();
+#endif
+
 void epicRtemsInit_net() {
     epicsRtemsInitRegisterHandler(
         "system", "net", rtemsInit_Order_net, true, rtemsNetInitialize);
+#if defined(BSP_beagleboneblack)
+    epicsRtemsInitRegisterHandler(
+        "bbb", "net.dhcp_pre", rtemsInit_Order_net - 10, true,
+        rtemsBbbNetPreInitialize);
+    epicsRtemsInitRegisterHandler(
+        "bbb", "net.dhcp_post", rtemsInit_Order_net + 10, true,
+        rtemsBbbNetPostInitialize);
+#endif
 }
+
+#if defined(HAVE_MOTLOAD) || defined(HAVE_PPCBUG) || defined(__mcf528x__)
+extern "C" int setNetConfigEnvFromNVRAM(char*, size_t);
+
+static int rtemsNetNVRAM() {
+    static char ntp_server_ip[16];
+    (void) setNetConfigEnvFromNVRAM(ntp_server_ip, sizeof(ntp_server_ip));
+    /*
+     * Applied whether or not static configuration was found: the NTP server
+     * address comes from NVRAM (epics-ntpserver, else the boot server) and is
+     * equally valid when the interface is configured by DHCP.
+     */
+    if (ntp_server_ip[0] != '\0') {
+        setenv("EPICS_TS_NTP_INET", ntp_server_ip, 0);
+        setenv("RTEMS_NET_NTP_IP", ntp_server_ip, 0);
+    }
+    return 0;
+}
+
+static epicsRtemsInitRegister rtemsNetNVRAM_reg(
+    "system", "net.nvram", 450, true, rtemsNetNVRAM);
+#endif

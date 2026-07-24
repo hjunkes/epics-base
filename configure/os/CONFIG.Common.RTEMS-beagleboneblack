@@ -35,6 +35,13 @@ include $(CONFIG)/os/CONFIG.Common.RTEMS
 #OP_SYS_CFLAGS += -DCONFIGURE_MICROSECONDS_PER_TICK=1000
 OP_SYS_CFLAGS += -DCONFIGURE_MICROSECONDS_PER_TICK=100
 
+# epicsRtemsInit_debugger.cpp (RTEMS_INIT=new only) calls into RTEMS's
+# debugger support, which lives in a separate library the generic
+# CONFIG.Common.RTEMS link list doesn't know about.
+ifneq ($(RTEMS_INIT),legacy)
+OP_SYS_LDLIBS += -ldebugger
+endif
+
 RTEMSSYMS=$(PRODNAME:%$(EXE)=%.sym)
 RTEMSIMGS=$(PRODNAME:%$(EXE)=%.bin)
 INSTALL_RTEMSSYMS=$(RTEMSSYMS:%=$(INSTALL_BIN)/%)
