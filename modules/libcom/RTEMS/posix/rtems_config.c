@@ -51,12 +51,17 @@ extern void *POSIX_Init(void *argument);
 /*
  * Configure LibBSD.
  */
-//#define RTEMS_BSD_CONFIG_NET_PF_UNIX
-//#define RTEMS_BSD_CONFIG_NET_IF_BRIDGE
-//#define RTEMS_BSD_CONFIG_NET_IF_LAGG
-//#define RTEMS_BSD_CONFIG_NET_IF_VLAN
+#define RTEMS_BSD_CONFIG_NET_PF_UNIX
+#define RTEMS_BSD_CONFIG_NET_IF_BRIDGE
+#define RTEMS_BSD_CONFIG_NET_IF_LAGG
+#define RTEMS_BSD_CONFIG_NET_IF_VLAN
 /* RTEMS_BSD_CONFIG_BSP_CONFIG intentionally omitted - custom nexus below */
 #define RTEMS_BSD_CONFIG_INIT
+#if !defined(RTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB)
+#error Add "ARCH_DEP_CFLAGS += -DRTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB=??" to your BSP CONFIG
+#endif
+#define RTEMS_BSD_CONFIG_DOMAIN_PAGE_MBUFS_SIZE \
+    (RTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB * 1024 * 1024)
 #include <machine/rtems-bsd-config.h>
 /* Custom BBB nexus devices - Ethernet/SD only, USB excluded (not in libbsd) */
 #if defined(LIBBSP_ARM_BEAGLE_BSP_H)
@@ -97,7 +102,10 @@ SYSINIT_DRIVER_REFERENCE(mmcsd, mmc);
  *
  *       cf. https://github.com/epics-base/epics-base/issues/300
  */
-#define CONFIGURE_MAXIMUM_FILE_DESCRIPTORS 64
+/*
+ * The default has moved to 256 in newlib
+ */
+#define CONFIGURE_MAXIMUM_FILE_DESCRIPTORS 256
 #define CONFIGURE_IMFS_ENABLE_MKFIFO    2
 
 #define CONFIGURE_MAXIMUM_NFS_MOUNTS 		3
@@ -114,18 +122,10 @@ SYSINIT_DRIVER_REFERENCE(mmcsd, mmc);
 #define CONFIGURE_BDBUF_MAX_READ_AHEAD_BLOCKS 4
 #define CONFIGURE_BDBUF_CACHE_MEMORY_SIZE (1 * 1024 * 1024)
 
-/* we are using POSIX_INIT needed by V4
-#define CONFIGURE_RTEMS_INIT_TASKS_TABLE
-#define CONFIGURE_INIT_TASK_STACK_SIZE (32 * 1024)
-#define CONFIGURE_INIT_TASK_INITIAL_MODES RTEMS_DEFAULT_MODES
-#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
-#endif
-*/
-
-//#define RTEMS_PCI_CONFIG_LIB
-//#define CONFIGURE_PCI_LIB PCI_LIB_AUTO
-
 #if __RTEMS_MAJOR__ > 4
+/*
+ * RTEMS 5 and higher
+ */
 #define CONFIGURE_SHELL_COMMANDS_INIT
 
 #include <bsp/irq-info.h>
@@ -172,14 +172,30 @@ SYSINIT_DRIVER_REFERENCE(mmcsd, mmc);
 #define CONFIGURE_SHELL_COMMAND_RM
 #define CONFIGURE_SHELL_COMMAND_MALLOC_INFO
 #define CONFIGURE_SHELL_COMMAND_SHUTDOWN
+#define CONFIGURE_SHELL_COMMAND_DATE
+#define CONFIGURE_SHELL_COMMAND_TIME
+#define CONFIGURE_SHELL_COMMAND_SETENV
+#define CONFIGURE_SHELL_COMMAND_GETENV
+#define CONFIGURE_SHELL_COMMAND_UNSETENV
+#define CONFIGURE_SHELL_COMMAND_MDUMP
+#define CONFIGURE_SHELL_COMMAND_WDUMP
+#define CONFIGURE_SHELL_COMMAND_LDUMP
+#define CONFIGURE_SHELL_COMMAND_MEDIT
+#define CONFIGURE_SHELL_COMMAND_MFILL
+#define CONFIGURE_SHELL_COMMAND_MMOVE
+#define CONFIGURE_SHELL_COMMAND_MOUNT
+#define CONFIGURE_SHELL_COMMAND_UNMOUNT
+#define CONFIGURE_SHELL_COMMAND_DF
+#define CONFIGURE_SHELL_COMMAND_MD5
+#define CONFIGURE_SHELL_COMMAND_FLASHDEV
+#define CONFIGURE_SHELL_COMMAND_EDIT
 
 #include <rtems/shellconfig.h>
 
 #define RTEMS_BSD_CONFIG_BSP_CONFIG
-#define RTEMS_BSD_CONFIG_SERVICE_TELNETD
-#define RTEMS_BSD_CONFIG_TELNETD_STACK_SIZE (16 * 1024)
 #define RTEMS_BSD_CONFIG_SERVICE_FTPD
 #define RTEMS_BSD_CONFIG_FIREWALL_PF
+
 #else // __RTEMS_MAJOR__ > 4
 #include <rtems/shellconfig.h>
 #endif // __RTEMS_MAJOR__ > 4
@@ -196,15 +212,10 @@ SYSINIT_DRIVER_REFERENCE(mmcsd, mmc);
  * The new general time support makes including the RTC driver less important.
  */
 #if !defined(mpc604) && !defined(__mc68040__) && !defined(__mcf5200__) && \
-    !defined(mpc7455) && !defined(__arm__)  && !defined(__nios2__)
+    !defined(mpc7455) && !defined(__arm__)  && !defined(__aarch64__) && \
+    !defined(__nios2__)
     /* don't have RTC code */
 #define CONFIGURE_APPLICATION_NEEDS_RTC_DRIVER
-#endif
-
-#if defined(BSP_pc386) || defined(BSP_pc686)
-#define RTEMS_BSD_CONFIG_DOMAIN_PAGE_MBUFS_SIZE (64 * 1024 * 1024)
-#elif defined(BSP_qoriq_e500)
-#define RTEMS_BSD_CONFIG_DOMAIN_PAGE_MBUFS_SIZE (32 * 1024 * 1024)
 #endif
 
 #define CONFIGURE_INIT
