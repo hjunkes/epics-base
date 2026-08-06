@@ -312,7 +312,7 @@ MAIN(epicsCalcTest)
                  m=13.0, n=14.0, o=15.0, p=16.0, q=17.0, r=18.0,
                  s=19.0, t=20.0, u=21.0;
 
-    testPlan(687);
+    testPlan(690);
 
     /* LITERAL_OPERAND elements */
     testExpr(0);
@@ -1045,6 +1045,36 @@ MAIN(epicsCalcTest)
     testUInt32Calc("a:=0x55555555; a >> 8", 0x00555555u);
     testUInt32Calc("a:=0x55555555; a >>> 8", 0x00555555u);
     testUInt32Calc("a:=0x55555555; a << 8", 0x55555500u);
+
+    // Regression test for the postfix() translation-stack overflow fixed by
+    // epics-base PR #947 ("Prevent stack overflow in calc expression
+    // compilation"): the old code used a fixed `ELEMENT stack[80]` on
+    // postfix()'s C stack, and a run of unary operators or open-parens
+    // pushes one element per character without popping any, so any CALC
+    // string with more than ~80 such characters smashed the stack. A field
+    // like calc/calcout's CALC (size 160) can hold such a run comfortably.
+    // With the fix the stack is malloc'd to fit the input, so this must
+    // just evaluate correctly rather than corrupting memory.
+    {
+        char expr[320];
+        int n;
+
+        for (n = 0; n < 220; n++) expr[n] = '-';
+        expr[220] = '1';
+        expr[221] = '\0';
+        testCalc(expr, 1.0);           /* even number of unary '-' => +1 */
+
+        for (n = 0; n < 219; n++) expr[n] = '-';
+        expr[219] = '1';
+        expr[220] = '\0';
+        testCalc(expr, -1.0);          /* odd number of unary '-' => -1 */
+
+        for (n = 0; n < 150; n++) expr[n] = '(';
+        expr[150] = '1';
+        for (n = 0; n < 150; n++) expr[151 + n] = ')';
+        expr[301] = '\0';
+        testCalc(expr, 1.0);           /* 150 levels of nested parens */
+    }
 
     // Test proper conversion of double values (+ 0.1 enforces double literal)
     // when used as inputs to the bitwise operations.
