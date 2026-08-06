@@ -557,6 +557,41 @@ static void test_fmt_overflow_flags(void){
     // number of tests = 3
 }
 
+static void test_fmt_overflow_digits(void){
+    /* Same overflow guard as test_fmt_overflow_flags(), but filled with '0'
+     * instead of '#'. '0' is not a flag character in this parser -- each one
+     * is consumed by the width-accumulation switch case (*pnum = *pnum*10 +
+     * ch-'0') rather than the no-op flag case, exercising the digit-parsing
+     * arm of the switch under the same buffer-full check (raised in review
+     * by mdavidsaver: https://github.com/epics-base/epics-base/pull/947).
+     * The bound check runs before the switch regardless of which arm would
+     * be taken, so the accepted-prefix/leftover-literal split is identical
+     * to the '#'-filled case. */
+    char format_string[MAX_STRING_SIZE];
+    char result_string[MAX_STRING_SIZE];
+
+    format_string[0] = '%';
+    memset(format_string + 1, '0', 25);     /* well past the 20-byte limit */
+    format_string[26] = 'd';
+    format_string[27] = '\0';
+
+    result_string[0] = '%';
+    memset(result_string + 1, '0', 24);
+    result_string[25] = 'd';
+    result_string[26] = '\0';
+
+    /* set format string */
+    testdbPutFieldOk("test_printf_rec.FMT", DBF_STRING, format_string);
+
+    /* processing the record (via inp0's FLNK) must not overflow format[] */
+    testdbPutFieldOk("test_printf_inp0_rec.VAL", DBF_SHORT, 0);
+
+    /* verify the over-long directive was rejected and echoed, not expanded */
+    testdbGetFieldEqual("test_printf_rec.VAL", DBF_STRING, result_string);
+
+    // number of tests = 3
+}
+
 static void test_fmt_overflow_star(void){
     /* The link-supplied width form '%*d' replaces the '*' with an integer
      * in the format buffer; the expansion must be checked. With 15 leading
@@ -597,7 +632,7 @@ MAIN(printfTest) {
 #endif
 
     testPlan(3+3+3+3+3+3+3+3+4+3+3+3+3+3+3+3+3+3+3+3+3+3+3+3+6+6+12
-        +3+3);
+        +3+3+3);
 
     testdbPrepare();
     testdbReadDatabase("recTestIoc.dbd", NULL, NULL);
@@ -637,6 +672,7 @@ MAIN(printfTest) {
     test_sizv();
     test_all_inputs();
     test_fmt_overflow_flags();
+    test_fmt_overflow_digits();
     test_fmt_overflow_star();
 
     testIocShutdownOk();
