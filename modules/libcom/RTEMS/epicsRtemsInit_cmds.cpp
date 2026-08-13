@@ -16,6 +16,13 @@
 #include <sys/syslog.h>
 
 #include <epicsRtemsInit.h>
+#include <cstdio>
+#include <cstring>
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <rtems/telnetd.h>
+#include "iocsh.h"
 
 #include <rtems.h>
 #include <rtems/libcsupport.h>
@@ -162,6 +169,76 @@ static const iocshArg * const setlogmaskArgs[1] = { &setlogmaskArg0 };
 static const iocshFuncDef setlogmaskFuncDef = { "setlogmask", 1, setlogmaskArgs,
                                                 "Set syslog() threshold level" };
 
+#define TELNET_LINE_SIZE 256
+static void
+telnet_pseudoIocsh(char *name, void *)
+{
+    char line[TELNET_LINE_SIZE];
+    /*
+     * The stdio FILE buffer may contain a stale VEOF (0x04) from
+     * the previous session. Purge the FILE input buffer and reset
+     * the error/EOF flags before starting a new session.
+     * Note: stdin FILE* is reused across sessions by telnetd.
+     */
+    /*
+     * Do NOT freopen() - that closes the PTY fd which triggers
+     * ptyShutdown() closing the socket, causing the next read to
+     * return VEOF. Instead reset the FILE* internal buffer state
+     * by directly clearing the glibc/newlib FILE struct fields.
+     * tcflush resets the termios cindex/ccount EOF hack in the PTY.
+     */
+    {
+        rtems_task_wake_after(RTEMS_MILLISECONDS_TO_TICKS(100));
+        int fd = fileno(stdin);
+        tcflush(fd, TCIFLUSH);
+        /* Reset newlib FILE buffer: clear read buffer and error flags */
+        stdin->_r  = 0;   /* no buffered data to read */
+        stdin->_p  = stdin->_bf._base;  /* reset read pointer */
+        stdin->_flags &= ~(__SEOF | __SERR);  /* clear EOF/error */
+    }
+    fflush(stdout);
+    fprintf(stdout, "EPICS IOC shell - type 'bye' to exit\r\n");
+    fflush(stdout);
+    /* Delay to let socket settle, then flush again */
+    rtems_task_wake_after(RTEMS_MILLISECONDS_TO_TICKS(500));
+    tcflush(fileno(stdin), TCIFLUSH);
+    clearerr(stdin);
+    while (1) {
+        fputs("tIocSh> ", stdout);
+        fflush(stdout);
+        if (fgets(line, TELNET_LINE_SIZE, stdin) == NULL) {
+                    fflush(stdout);
+            break;
+        }
+            fflush(stdout);
+        if (line[0] == '\004') break;  /* VEOF: connection closed */
+        size_t len = strlen(line);
+        while (len > 0 &&
+               (line[len-1] == '\n' || line[len-1] == '\r'))
+            line[--len] = 0;
+        if (len == 0) continue;
+        if (strncmp(line, "bye", 3) == 0) {
+            fprintf(stdout, "bye\r\n");
+            fflush(stdout);
+            break;
+        }
+        iocshCmd(line);
+    }
+    fprintf(stdout, "\r\ntelnet: session closed\r\n");
+    fflush(stdout);
+}
+
+rtems_telnetd_config_table rtems_telnetd_config = {
+    .command        = telnet_pseudoIocsh,
+    .arg            = NULL,
+    .priority       = 0,
+    .stack_size     = 0,
+    .login_check    = NULL,
+    .keep_stdio     = false,
+    .client_maximum = 0,
+    .port           = 23
+};
+
 static int rtemsCmdsInitialize() {
     iocshRegister(&netStatFuncDef, netStatCallFunc);
     iocshRegister(&heapSpaceFuncDef, heapSpaceCallFunc);
@@ -170,6 +247,17 @@ static int rtemsCmdsInitialize() {
     iocshRegister(&setlogmaskFuncDef, &setlogmaskCallFunc);
     rtems_shell_init_environment();
     std::cout << "RTEMS Commands registered" << std::endl;
+    /* Start telnetd for remote IOC shell access */
+    {
+        auto envp = getenv("RTEMS_TELNETD_PORT");
+        if (envp == nullptr || std::string(envp) != "0") {
+            int r = (int)rtems_telnetd_initialize();
+            if (r != 0)
+                std::cout << "error: telnetd: initialize failed: " << r << std::endl;
+            else
+                std::cout << "telnetd: started" << std::endl;
+        }
+    }
     return 0;
 }
 
