@@ -8,6 +8,7 @@
 /* trigger sys/syslog.h to emit prioritynames[] */
 #define SYSLOG_NAMES
 
+#include <cstring>
 #include <iostream>
 
 #include <stdio.h>
