@@ -74,7 +74,7 @@
 #include <rtems/bsd/iface.h>
 #include <rtems/dhcpcd.h>
 #include <rtems/ntpd.h>
-#include <rtems/rtems_bsdnet.h> 
+#include <rtems/rtems_bsdnet.h>
 #include <net/if.h>
 #include <ifaddrs.h>
 #include <machine/rtems-bsd-commands.h>
@@ -1063,7 +1063,7 @@ POSIX_Init ( void *argument __attribute__((unused)))
 
     param.sched_priority = (sched_get_priority_max(policy)
                             - sched_get_priority_min(policy))
-                         * epicsThreadPriorityIocsh / 100; 
+                         * epicsThreadPriorityIocsh / 100;
 
     sc = pthread_setschedparam(pthread_self(), policy, &param);
     assert(sc == RTEMS_SUCCESSFUL);
@@ -1136,7 +1136,7 @@ POSIX_Init ( void *argument __attribute__((unused)))
     /* Simplest: call client_pool_config first to get leap-seconds written,
        then immediately overwrite ntp.conf with our server version */
     rtems_ntpd_client_pool_config(rtemsInit_NTP_server_ip);  /* writes leap-seconds */
-    
+
     printf("\n***** Prepare ntp.conf (server %s) *****\n", rtemsInit_NTP_server_ip);
     /* Now overwrite ntp.conf with correct server + iburst */
     FILE *fp = fopen("/etc/ntp.conf", "w");
@@ -1224,7 +1224,7 @@ POSIX_Init ( void *argument __attribute__((unused)))
         if (epicsThreadHighestPriorityLevelBelow(epicsThreadPriorityScanLow, &p)
                                             != epicsThreadBooleanStatusSuccess)
         {
-            p = RTEMS_MAXIMUM_PRIORITY 
+            p = RTEMS_MAXIMUM_PRIORITY
               - ( RTEMS_MAXIMUM_PRIORITY - RTEMS_MINIMUM_PRIORITY ) * epicsThreadPriorityScanLow / 100;
         }
         printf(" This is network task prio (RTEMS) : %d , OSI Prio %d\n", p, epicsThreadPriorityScanLow);
@@ -1330,7 +1330,7 @@ POSIX_Init ( void *argument __attribute__((unused)))
 #endif
 
 #if 0
-//   debugger_config(); 
+//   debugger_config();
 // Start an rtems shell before main, for debugging RTEMS system issues
     rtems_shell_init("SHLL", RTEMS_MINIMUM_STACK_SIZE * 4,
                      100, "/dev/console",
