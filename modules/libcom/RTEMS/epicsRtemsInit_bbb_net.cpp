@@ -47,6 +47,17 @@
 
 namespace {
 
+/*
+ * Dump every dhcpcd environment variable as it arrives. Useful when
+ * commissioning a DHCP server -- it shows exactly which of 129 / 77 /
+ * 67 / 17 / 66 / the BOOTP file field that server actually delivers,
+ * which is how the executable-in-option-67 trap below was found.
+ *
+ * Left on while this site's DHCP server is being reconfigured; set to
+ * false before proposing this upstream.
+ */
+static constexpr bool bbb_net_verbose = true;
+
 epicsEventId bbbDhcpDone;
 
 char bbbInterface[16]       = "?";
@@ -62,8 +73,16 @@ char bbbNtpServers[80]      = "";
 /* NFS export, as "server:/export" -- option 66 or, failing that, 17 */
 char bbbTftpServerName[128] = "";
 char bbbRootPath[128]       = "";
-/* st.cmd path -- option 129, or option 67, or the BOOTP 'file' field */
+/* st.cmd path -- option 129, else option 77, else option 17 */
 char bbbRtemsCmdline[128]   = "";
+char bbbUserClass[128]      = "";
+/*
+ * Captured for the log only. Measured on this network 2026-09-17:
+ * bootfile-name (67) carries the IOC *executable* and the BOOTP file
+ * field carries u-boot's TFTP image ("beaglebone/beaglePyroIOC.img"),
+ * so neither is a startup-script source -- see the note above the
+ * candidate list in rtemsBbbNetPostInitialize().
+ */
 char bbbBootfileName[128]   = "";
 char bbbFilename[128]       = "";
 
@@ -83,12 +102,16 @@ void bbbDhcpcdHookHandler(rtems_dhcpcd_hook *hook, char *const *env) {
         { "new_tftp_server_name",  bbbTftpServerName,  sizeof(bbbTftpServerName) },
         { "new_root_path",         bbbRootPath,        sizeof(bbbRootPath) },
         { "new_rtems_cmdline",     bbbRtemsCmdline,    sizeof(bbbRtemsCmdline) },
+        { "new_user_class",        bbbUserClass,       sizeof(bbbUserClass) },
         { "new_bootfile_name",     bbbBootfileName,    sizeof(bbbBootfileName) },
         { "new_filename",          bbbFilename,        sizeof(bbbFilename) },
         { nullptr, nullptr, 0 }
     };
 
     for (; *env != nullptr; ++env) {
+        if (bbb_net_verbose) {
+            std::cout << "bbb net: dhcpcd ---> '" << *env << "'" << std::endl;
+        }
         for (auto* v = vars; v->name != nullptr; ++v) {
             size_t namelen = std::strlen(v->name);
             if (std::strncmp(*env, v->name, namelen) != 0 ||
@@ -187,18 +210,52 @@ void writeDhcpcdConf() {
             "option ntp_servers\n"
             "option tftp_server_name\n"
             "option root_path\n"
+            "option user_class\n"
             "option bootfile_name\n"
             "require dhcp_server_identifier\n";
 }
 
-const char* firstNonEmpty(const char* a, const char* b, const char* c) {
-    if (a[0] != '\0') {
-        return a;
+/*
+ * The fallback options below all have other legitimate users, so a value
+ * is only accepted once its shape says it is the thing we are looking
+ * for. This matters most for the BOOTP 'file' header field: u-boot's
+ * "dhcp" command autoloads it over TFTP (see the board's uEnv.txt), so
+ * on this hardware it normally holds the RTEMS image path, e.g.
+ * "bbb/rtems.img" -- taking that as the startup script would be wrong
+ * and confusing. A DHCP server may of course hand out a different file
+ * field per vendor-class-identifier (u-boot sends "U-Boot.armv7...",
+ * dhcpcd sends "dhcpcd-<version>"), in which case the field really is
+ * ours and the check below passes it through.
+ */
+
+/* An NFS export spec is "server:/export" */
+bool looksLikeExport(const char* s) {
+    return std::strchr(s, ':') != nullptr;
+}
+
+/*
+ * A startup script path is absolute and, because epicsRtemsInit_nfs.cpp
+ * mounts the export and then chdirs below it, has to sit under the
+ * export we were given.
+ */
+bool looksLikeCmdline(const char* s, const std::string& nfsExport) {
+    if (s[0] != '/') {
+        return false;
     }
-    if (b[0] != '\0') {
-        return b;
+    if (nfsExport.empty()) {
+        return true;
     }
-    return c;
+    return std::strncmp(s, nfsExport.c_str(), nfsExport.size()) == 0;
+}
+
+const char* firstMatching(
+    const char* const* candidates, bool (*pred)(const char*)) {
+    for (; *candidates != nullptr; ++candidates) {
+        if ((*candidates)[0] != '\0' && pred(*candidates)) {
+            return *candidates;
+        }
+    }
+    return "";
 }
 
 /* ntp-servers is a space-separated list; the NTP code wants one address */
@@ -275,9 +332,51 @@ int rtemsBbbNetPostInitialize() {
         setenv("RTEMS_NET_NTP_IP", ntp.c_str(), 1);
     }
 
-    const char* nfsBase = firstNonEmpty(bbbTftpServerName, bbbRootPath, "");
-    const char* cmdline =
-        firstNonEmpty(bbbRtemsCmdline, bbbBootfileName, bbbFilename);
+    /*
+     * root-path (17) can plausibly carry either the export or the script
+     * path depending on how the server is set up, so both lists include
+     * it and the shape decides which role it takes.
+     */
+    const char* exportCandidates[] = {
+        bbbTftpServerName, bbbRootPath, nullptr };
+    const char* nfsBase = firstMatching(exportCandidates, looksLikeExport);
+
+    std::string nfsExport;
+    if (nfsBase[0] != '\0') {
+        nfsExport = std::strchr(nfsBase, ':') + 1;
+    }
+
+    /*
+     * Option 129 is ours alone, so it is taken as given; the rest have
+     * to look like a script path below the export.
+     *
+     * Only user-class (77) and root-path (17) are candidates. Two
+     * plausible-looking options are deliberately NOT here, as measured
+     * against this site's server on 2026-09-17:
+     *
+     *   - bootfile-name (67) held the IOC executable
+     *     (".../bin/RTEMS-beagleboneblack/beaglePyroIOC"), which is
+     *     absolute and below the export and would therefore have passed
+     *     looksLikeCmdline() while being the wrong file entirely.
+     *   - the BOOTP file field held "beaglebone/beaglePyroIOC.img",
+     *     u-boot's TFTP image. Relative, so the guard rejects it, but
+     *     it is not ours to consume in the first place.
+     *
+     * 77 is the only one of these that a stock dhcpcd can actually put
+     * in the request list, so it is what makes this work against a
+     * server that answers only what was asked for.
+     */
+    const char* cmdline = bbbRtemsCmdline;
+    if (cmdline[0] == '\0') {
+        const char* cmdlineCandidates[] = {
+            bbbUserClass, bbbRootPath, nullptr };
+        for (auto** c = cmdlineCandidates; *c != nullptr; ++c) {
+            if ((*c)[0] != '\0' && looksLikeCmdline(*c, nfsExport)) {
+                cmdline = *c;
+                break;
+            }
+        }
+    }
 
     if (nfsBase[0] != '\0' && cmdline[0] != '\0') {
         setenv("RTEMS_BOOT_CMD_LINE", cmdline, 1);
