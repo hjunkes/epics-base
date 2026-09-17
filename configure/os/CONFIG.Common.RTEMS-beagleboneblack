@@ -12,6 +12,11 @@ GNU_TARGET = arm-rtems
 OP_SYS_LDFLAGS += -Wl,--gc-sections
 ARCH_DEP_LDFLAGS = -L$(RTEMS_BASE)/$(GNU_TARGET)$(RTEMS_VERSION)/beagleboneblack/lib/
 
+# posix/rtems_config.c requires each BSP to size the libbsd mbuf pool.
+# The BBB has 512MB of RAM; 16MB is a conservative starting point, raise
+# it if mbuf exhaustion shows up under network load.
+ARCH_DEP_CFLAGS += -DRTEMS_BSD_DOMAIN_PAGE_MBUFS_SIZE_MB=16
+
 include $(CONFIG)/os/CONFIG.Common.RTEMS
 
 
