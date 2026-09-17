@@ -53,10 +53,9 @@ namespace {
  * 67 / 17 / 66 / the BOOTP file field that server actually delivers,
  * which is how the executable-in-option-67 trap below was found.
  *
- * Left on while this site's DHCP server is being reconfigured; set to
- * false before proposing this upstream.
+ * Off by default; turn on when commissioning a DHCP server.
  */
-static constexpr bool bbb_net_verbose = true;
+static constexpr bool bbb_net_verbose = false;
 
 epicsEventId bbbDhcpDone;
 
