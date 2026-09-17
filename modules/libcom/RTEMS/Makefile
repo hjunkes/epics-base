@@ -16,6 +16,8 @@ SRC_DIRS += ../$(OS_API)
 
 PERL_SCRIPTS += epicsMakeMemFs.pl
 
+DOCS = epicsRtemsInit.md
+
 INC += epicsRtemsInitHooks.h
 INC += epicsMemFs.h
 INC += epicsNtp.h
