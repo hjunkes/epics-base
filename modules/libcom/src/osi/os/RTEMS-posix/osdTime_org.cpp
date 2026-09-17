@@ -203,7 +203,7 @@ static const char etc_ntp_conf[] =
     "restrict default limited kod nomodify notrap noquery nopeer\n"
     "restrict 127.0.0.1\n"
     "server 141.14.138.238\n"
-    "restrict 141.14.138.238 nomodify notrap nopeer noquery\n" 
+    "restrict 141.14.138.238 nomodify notrap nopeer noquery\n"
     "restrict 10.0.0.0 mask 255.0.0.0 nomodify notrap nopeer\n"
     "leapfile \"/etc/leap-seconds\"\n";
 
