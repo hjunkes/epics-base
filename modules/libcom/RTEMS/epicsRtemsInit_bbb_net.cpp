@@ -210,7 +210,6 @@ void writeDhcpcdConf() {
             "option tftp_server_name\n"
             "option root_path\n"
             "option user_class\n"
-            "option bootfile_name\n"
             "require dhcp_server_identifier\n";
 }
 
