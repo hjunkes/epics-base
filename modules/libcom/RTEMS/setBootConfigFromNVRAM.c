@@ -351,12 +351,34 @@ setNetConfigEnvFromNVRAM(char *ntp_server_ip, size_t ntp_server_ip_size)
     return -1;
 # endif
     mot_script_boot = gev("mot-script-boot", nvp);
-    if ((cfg.ip_address = gev("mot-/dev/enet0-cipa", nvp)) == NULL)
-        cfg.ip_address = motScriptParm(mot_script_boot, 'c');
-    if ((cfg.netmask = gev("mot-/dev/enet0-snma", nvp)) == NULL)
-        cfg.netmask = motScriptParm(mot_script_boot, 'm');
-    if ((cfg.gateway = gev("mot-/dev/enet0-gipa", nvp)) == NULL)
-        cfg.gateway = motScriptParm(mot_script_boot, 'g');
+
+    /*
+     * Explicit DHCP opt-in:  MVME6100> gevEdit epics-net-config  ->  dhcp
+     *
+     * Needed because DHCP cannot otherwise be selected on a board that
+     * netboots. Deleting the cipa/snma GEVs is not enough: motScriptParm()
+     * then recovers both from mot-script-boot, and that script has to carry
+     * -c/-m for MOTLoad's own tftpGet to fetch the image at all. Intent
+     * therefore has to be stated, not inferred from missing values.
+     *
+     * The gateway is deliberately left unset too. Handing rc.conf a
+     * defaultrouter while dhcpcd installs its own default route produces
+     * "ipv4_addroute: File exists" and a bogus route.
+     */
+    int use_dhcp = 0;
+    {
+        const char *net_config = gev("epics-net-config", nvp);
+        use_dhcp = net_config != NULL && epicsStrCaseCmp(net_config, "dhcp") == 0;
+    }
+
+    if (!use_dhcp) {
+        if ((cfg.ip_address = gev("mot-/dev/enet0-cipa", nvp)) == NULL)
+            cfg.ip_address = motScriptParm(mot_script_boot, 'c');
+        if ((cfg.netmask = gev("mot-/dev/enet0-snma", nvp)) == NULL)
+            cfg.netmask = motScriptParm(mot_script_boot, 'm');
+        if ((cfg.gateway = gev("mot-/dev/enet0-gipa", nvp)) == NULL)
+            cfg.gateway = motScriptParm(mot_script_boot, 'g');
+    }
     {
         char *ntp_gev = gev("epics-ntpserver", nvp);
         char *server  = gev("mot-/dev/enet0-sipa", nvp);
@@ -365,7 +387,8 @@ setNetConfigEnvFromNVRAM(char *ntp_server_ip, size_t ntp_server_ip_size)
     cfg.hostname = gev("rtems-client-name", nvp);
 
     /* Set RTEMS_NET_* env vars for rtems_bsd_rc_conf_from_env() */
-    printf("setNetConfigEnvFromNVRAM: ip=%s nm=%s gw=%s script=%s\n",
+    printf("setNetConfigEnvFromNVRAM: %s ip=%s nm=%s gw=%s script=%s\n",
+           use_dhcp ? "dhcp (epics-net-config)" : "static",
            cfg.ip_address ? cfg.ip_address : "NULL",
            cfg.netmask ? cfg.netmask : "NULL",
            cfg.gateway ? cfg.gateway : "NULL",
