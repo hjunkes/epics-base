@@ -113,9 +113,25 @@ static int rtemsNetInitialize() {
     return 0;
 }
 
+#if defined(BSP_beagleboneblack)
+/* Implemented in epicsRtemsInit_bbb_net.cpp: bridges DHCP-delivered
+ * boot config (no NVRAM on this board) into the env vars the rest of
+ * this init framework expects. */
+extern int rtemsBbbNetPreInitialize();
+extern int rtemsBbbNetPostInitialize();
+#endif
+
 void epicRtemsInit_net() {
     epicsRtemsInitRegisterHandler(
         "system", "net", rtemsInit_Order_net, true, rtemsNetInitialize);
+#if defined(BSP_beagleboneblack)
+    epicsRtemsInitRegisterHandler(
+        "bbb", "net.dhcp_pre", rtemsInit_Order_net - 10, true,
+        rtemsBbbNetPreInitialize);
+    epicsRtemsInitRegisterHandler(
+        "bbb", "net.dhcp_post", rtemsInit_Order_net + 10, true,
+        rtemsBbbNetPostInitialize);
+#endif
 }
 
 #if defined(HAVE_MOTLOAD) || defined(HAVE_PPCBUG) || defined(__mcf528x__)
