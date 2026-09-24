@@ -15,6 +15,15 @@
 #include <rtems.h>
 #include <rtems/libio.h>
 
+/*
+ * Mount options for the NFS export. Override per BSP with
+ *   ARCH_DEP_CFLAGS += -DNET_CFG_NFS_MOUNT_OPTIONS=\"...\"
+ * The default preserves the value this code previously hard-coded.
+ */
+#ifndef NET_CFG_NFS_MOUNT_OPTIONS
+#define NET_CFG_NFS_MOUNT_OPTIONS "nfsv4,minorversion=1"
+#endif
+
 static int rtemsNFSInitialize() {
     /*
      * Split argument string of form nfs_server:nfs_export:<path>
