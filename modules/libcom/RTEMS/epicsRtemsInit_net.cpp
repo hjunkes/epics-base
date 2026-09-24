@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 
+#include <ifaddrs.h>
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <net/route.h>
@@ -40,12 +41,53 @@ static constexpr bool net_verbose = false;
  *
  * Returns 0 if link came up, -1 on timeout or an error code.
  */
+/* Current link state of an interface, without waiting for anything. */
+static bool link_is_up(const char *ifname) {
+    struct ifaddrs *ifap = nullptr;
+    if (getifaddrs(&ifap) != 0) {
+        return false;
+    }
+    bool up = false;
+    for (struct ifaddrs *ifa = ifap; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == nullptr || ifa->ifa_addr->sa_family != AF_LINK ||
+            ifa->ifa_data == nullptr || strcmp(ifa->ifa_name, ifname) != 0) {
+            continue;
+        }
+        auto* data = (struct if_data*) ifa->ifa_data;
+        up = data->ifi_link_state == LINK_STATE_UP;
+        break;
+    }
+    freeifaddrs(ifap);
+    return up;
+}
+
+/*
+ * Wait until the named interface reports link up.
+ *
+ * Order matters here. The routing socket is opened first, so that any
+ * transition from this point on is queued on it; only then is the
+ * current state examined. Checking first and opening afterwards would
+ * leave a window in which the link comes up unseen and the subsequent
+ * wait has nothing left to wait for.
+ *
+ * The check itself is needed because this runs after
+ * rtems_bsd_run_etc_rc_conf() has already configured the interfaces, so
+ * on most boots the link is up before we are called and no further
+ * RTM_IFINFO transition is coming -- a purely edge-triggered wait then
+ * burns its entire timeout on every boot.
+ */
 static int wait_for_link_up(const char *ifname, int timeout_secs) {
     int sock = socket(PF_ROUTE, SOCK_RAW, 0);
     if (sock < 0) {
         std::cout << "error: net: route sock open: " << std::strerror(errno)
                   << std::endl;
         return 3;
+    }
+
+    if (link_is_up(ifname)) {
+        std::cout << ifname << ": link already up" << std::endl;
+        close(sock);
+        return 0;
     }
 
     std::cout << ifname << ": waiting for link (timeout " << timeout_secs << "s)... "
