@@ -131,6 +131,17 @@ static int atomicVprintfHandler(int level, const char *fmt, va_list ap) {
 static int rtemsLogResetInitialize() {
     previousVprintfHandler = rtems_bsd_set_vprintf_handler(atomicVprintfHandler);
 
+    /*
+     * Put errlog's console on stdout.
+     *
+     * By default errlog writes to stderr while iocsh echoes to
+     * epicsGetStdout(). Those are two different FILE objects with
+     * independent buffers, so their output collides at the console
+     * device and lines come out interleaved character by character.
+     * Sharing one stream is the precondition for them not to.
+     */
+    errlogSetConsole(stdout);
+
     void rtems_bsp_reset_cause(char *buf, size_t capacity) __attribute__((weak));
     void (*reset_cause_p)(char *buf, size_t capacity) = rtems_bsp_reset_cause;
 
