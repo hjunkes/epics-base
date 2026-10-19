@@ -123,8 +123,8 @@ struct rtems_static_ifconfig {
 /* friggle hpj 10.10.24 */
 struct rtems_static_ifconfig rtems_static_ifconfig = {NULL,NULL};
 
-/* char rtemsInit_NTP_server_ip[16] = "10.0.0.100"; */
-char rtemsInit_NTP_server_ip[16] = "141.14.138.238";
+char rtemsInit_NTP_server_ip[16] = "10.0.0.100";
+/* char rtemsInit_NTP_server_ip[16] = "141.14.138.238"; */
 char bootp_server_name_init[128] = "1001.1001@10.0.5.1:/epics";
 char bootp_boot_file_name_init[128] = "/epics/myExample/bin/RTEMS-beatnik/myExample.boot";
 char bootp_cmdline_init[128] = "/epics/myExample/iocBoot/iocmyExample/st.cmd";
@@ -1195,12 +1195,13 @@ POSIX_Init ( void *argument __attribute__((unused)))
         epicsEventWaitStatus stat;
         printf("\n ---- Waiting for DHCP ...\n");
         stat = epicsEventWaitWithTimeout(dhcpDone, 600);
-        if (stat == epicsEventOK)
-           epicsEventDestroy(dhcpDone);
-        else if (stat == epicsEventWaitTimeout)
+        /* dhcpcd_hook_handler() stays registered and signals dhcpDone on every
+         * later BOUND, so the event has to outlive this wait.
+         */
+        if (stat == epicsEventWaitTimeout)
             printf("\n ---- DHCP timed out!\n");
-        else
-           printf("\n ---- dhcpDone Event Unknown state %d\n", stat);
+        else if (stat != epicsEventOK)
+            printf("\n ---- dhcpDone Event Unknown state %d\n", stat);
     }
     if(1) {
         const char* ifconfg_args[] = {
@@ -1318,8 +1319,13 @@ POSIX_Init ( void *argument __attribute__((unused)))
      */
     printf ("***** Preparing EPICS application *****\n");
     iocshRegisterRTEMS ();
-    set_directory (argv[1]);
-    epicsEnvSet ("IOC_STARTUP_SCRIPT", argv[1]);
+    /* No startup script when the application declares that it needs no
+     * filesystem (epicsRtemsFSImage == NULL).
+     */
+    if (argv[1] != NULL) {
+        set_directory (argv[1]);
+        epicsEnvSet ("IOC_STARTUP_SCRIPT", argv[1]);
+    }
     atexit(exitHandler);
     printf ("***** Starting EPICS application *****\n");
 
@@ -1338,7 +1344,7 @@ POSIX_Init ( void *argument __attribute__((unused)))
                      NULL);
 #endif
 
-    result = main ((sizeof argv / sizeof argv[0]) - 1, argv);
+    result = main (argv[1] != NULL ? 2 : 1, argv);
     printf ("***** IOC application terminating *****\n");
     epicsThreadSleep(1.0);
     epicsExit(result);
