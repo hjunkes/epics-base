@@ -66,11 +66,43 @@ static void rtshellCallFunc(const iocshArgBuf *args) {
 /*
  * RTEMS status
  */
+#ifndef RTEMS_LEGACY_STACK
+/* run the libbsd netstat shell command with a single option */
+static void
+bsd_netstat (const char *opt)
+{
+    char name[] = "netstat";
+    char arg[4];
+    char *argv[] = { name, arg, NULL };
+    rtems_shell_cmd_t *cmd = rtems_shell_lookup_cmd(name);
+
+    if (!cmd) {
+        fprintf(stderr, "ERR: netstat shell command not available\n");
+        iocshSetError(-1);
+        return;
+    }
+    strncpy(arg, opt, sizeof(arg) - 1);
+    arg[sizeof(arg) - 1] = '\0';
+    fflush(stdout);
+    fflush(stderr);
+    iocshSetError((*cmd->command)(2, argv));
+    fflush(stdout);
+    fflush(stderr);
+}
+#endif
+
 static void
 rtems_netstat (unsigned int level)
 {
 #ifndef RTEMS_LEGACY_STACK
-
+    bsd_netstat ("-i");
+    bsd_netstat ("-m");
+    if (level >= 1) {
+        bsd_netstat ("-r");
+    }
+    if (level >= 2) {
+        bsd_netstat ("-s");
+    }
 #else
     rtems_bsdnet_show_if_stats ();
     rtems_bsdnet_show_mbuf_stats ();
